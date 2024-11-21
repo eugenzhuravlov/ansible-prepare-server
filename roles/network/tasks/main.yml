@@ -1,0 +1,87 @@
+---
+- name: Gather facts about active network interfaces
+  setup:
+    gather_subset:
+      - network
+
+- name: Identify the active network interface
+  set_fact:
+    interface_name: "{{ ansible_default_ipv4.interface }}"
+
+- name: Check if the interface is already named net0
+  debug:
+    msg: "The active interface is already named 'net0'. No renaming required."
+  when: interface_name == "net0"
+
+- name: Check if /etc/netplan/ contains net0 configuration
+  command: grep -l "net0" /etc/netplan/*
+  register: netplan_check
+  changed_when: false
+  failed_when: false
+
+- name: Skip renaming if net0 is already in /etc/netplan
+  debug:
+    msg: "The /etc/netplan/ configuration already includes 'net0'."
+  when: netplan_check.stdout != ""
+
+- name: Display facts about the current interface
+  debug:
+    msg:
+      - "Current interface name: {{ interface_name }}"
+      - "IPv4 Address: {{ ansible_default_ipv4.address }}"
+      - "MAC Address: {{ ansible_facts[interface_name]['macaddress'] }}"
+      - "MTU: {{ ansible_facts[interface_name]['mtu'] }}"
+
+- name: Schedule a reboot in 60 seconds
+  command: shutdown -r +1 "Renaming network interface to net0"
+  async: 1
+  poll: 0
+  ignore_errors: true
+  when: not ansible_check_mode
+
+- name: Rename network interface to net0
+  command: ip link set dev {{ interface_name }} down && ip link set dev {{ interface_name }} name net0
+  register: interface_rename
+  become: true
+  when: interface_name != "net0" and netplan_check.stdout == ""
+
+- name: Bring up the renamed interface
+  command: ip link set dev net0 up
+  become: true
+  when: interface_name != "net0"
+
+- name: Retrieve updated facts after renaming
+  setup:
+    gather_subset:
+      - network
+
+- name: Display facts about the renamed interface
+  debug:
+    msg:
+      - "New interface name: net0"
+      - "IPv4 Address: {{ ansible_facts['net0']['ipv4']['address'] }}"
+      - "MAC Address: {{ ansible_facts['net0']['macaddress'] }}"
+      - "MTU: {{ ansible_facts['net0']['mtu'] }}"
+  when: "'net0' in ansible_facts"
+
+- name: Find the netplan file responsible for network configuration
+  shell: grep -l "{{ interface_name }}" /etc/netplan/*
+  register: netplan_file
+  changed_when: false
+
+- name: Update netplan configuration to rename interface
+  replace:
+    path: "{{ netplan_file.stdout }}"
+    regexp: "{{ interface_name }}"
+    replace: "net0"
+  when: netplan_file.stdout != ""
+
+- name: Apply netplan changes
+  command: netplan apply
+  become: true
+  when: netplan_file.stdout != ""
+
+- name: Cancel the scheduled reboot
+  command: shutdown -c
+  ignore_errors: true
+  become: true

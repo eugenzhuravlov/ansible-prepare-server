@@ -1,0 +1,16 @@
+---
+- name: Update GRUB
+  command: update-grub
+
+- name: Restart cpufrequtils
+  service:
+    name: cpufrequtils
+    state: restarted
+  when: ansible_facts.services['cpufrequtils'] is defined
+
+
+- name: Restart cpupower
+  service:
+    name: cpupower.service
+    state: restarted
+  when: ansible_facts.services['cpupower.service'] is defined

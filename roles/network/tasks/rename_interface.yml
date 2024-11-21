@@ -1,0 +1,43 @@
+---
+- name: Gather facts about active network interfaces
+  setup:
+    gather_subset:
+      - network
+
+- name: Identify the active network interface
+  set_fact:
+    interface_name: "{{ ansible_default_ipv4.interface }}"
+
+- name: Display facts about the current interface
+  debug:
+    msg:
+      - "Current interface name: {{ interface_name }}"
+      - "IPv4 Address: {{ ansible_default_ipv4.address }}"
+      - "MAC Address: {{ ansible_facts[interface_name]['macaddress'] }}"
+      - "MTU: {{ ansible_facts[interface_name]['mtu'] }}"
+
+- name: Schedule a reboot in 60 seconds
+  command: shutdown -r +1 "Renaming network interface to net0"
+  async: 1
+  poll: 0
+  ignore_errors: true
+
+- name: Rename network interface to net0
+  command: ip link set dev {{ interface_name }} down && ip link set dev {{ interface_name }} name net0
+  register: interface_rename
+  become: true
+
+- name: Bring up the renamed interface
+  command: ip link set dev net0 up
+  become: true
+
+- name: Display facts about the renamed interface
+  debug:
+    msg:
+      - "Renamed interface details: {{ interface_rename }}"
+      - "New interface name: net0"
+
+- name: Cancel the scheduled reboot
+  command: shutdown -c
+  ignore_errors: true
+  become: true

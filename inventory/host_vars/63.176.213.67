@@ -1,0 +1,5 @@
+---
+# Task settings
+partition_name: /dev/xvdf
+encrypted_partition_name: encrypted_disk
+mount_path: /mnt/encrypted

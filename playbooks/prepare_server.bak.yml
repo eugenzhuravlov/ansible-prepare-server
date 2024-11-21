@@ -1,0 +1,19 @@
+---
+- name: Prepare server for operation
+  hosts: dev
+  # Covered by hosts
+  #remote_user: ubuntu
+  become: yes
+  #gather_facts: no
+  vars:
+    ht_info: "{{ ansible_processor_cores }} cores, Hyper-Threading: {{ 'enabled' if ansible_processor_threads_per_core > 1 else 'disabled' }}"
+  roles:
+    - role: encrypt_second_disk
+    - role: encrypt_next_partition
+    - role: cpu
+    - role: network
+
+  tasks:
+    - name: Display information about CPUs and Hyper-Threading
+      debug:
+        msg: "{{ ht_info }}"

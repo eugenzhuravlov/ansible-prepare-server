@@ -1,0 +1,83 @@
+- name: Check if the partition exists
+  stat:
+    path: "/dev/{{ next_partition.stdout }}"
+  register: partition_stat
+
+- name: Fail if the partition does not exist
+  fail:
+    msg: "The partition /dev/{{ next_partition.stdout }} does not exist."
+  when: not partition_stat.stat.exists
+
+- name: Check if the partition is already encrypted
+  shell: cryptsetup isLuks /dev/{{ next_partition.stdout }}
+  register: luks_check
+  failed_when: false
+  changed_when: false
+  check_mode: no  # Ensures the task runs even in --check mode
+
+- name: Check if the partition is mounted
+  shell: findmnt -n -o TARGET /dev/{{ next_partition.stdout }}
+  register: mount_check
+  failed_when: false
+  changed_when: false
+  check_mode: no  # Ensures the task runs even in --check mode
+
+- name: Fail if the partition is already mounted
+  fail:
+    msg: "The partition /dev/{{ next_partition.stdout }} is already mounted at {{ mount_check.stdout }}."
+  when: mount_check.stdout != ""
+
+- name: Encrypt the partition
+  command: cryptsetup luksFormat /dev/{{ next_partition.stdout }} --batch-mode
+  when: luks_check.rc != 0
+
+- name: Open the encrypted partition
+  command: cryptsetup luksOpen /dev/{{ next_partition.stdout }} encrypted_next_partition
+  register: luks_open
+  changed_when: luks_open.rc == 0
+  failed_when: luks_open.rc != 0
+
+- name: Verify the encrypted partition is available
+  stat:
+    path: "/dev/mapper/encrypted_next_partition"
+  register: encrypted_partition_stat
+
+- name: Simulate encrypted partition existence in check mode
+  set_fact:
+    encrypted_partition_stat:
+      stat:
+        exists: true
+  when: ansible_check_mode
+
+- name: Fail if the encrypted partition is not available
+  fail:
+    msg: "The encrypted partition /dev/mapper/encrypted_next_partition was not created."
+  when: not encrypted_partition_stat.stat.exists and not ansible_check_mode
+
+- name: Create a filesystem on the encrypted partition
+  filesystem:
+    fstype: ext4
+    dev: "/dev/mapper/encrypted_next_partition"
+  when: not encrypted_partition_stat.stat.exists and not ansible_check_mode
+
+- name: Create mount directory
+  file:
+    path: "{{ mount_path }}"
+    state: directory
+
+- name: Mount the encrypted partition
+  mount:
+    path: "{{ mount_path }}"
+    src: "/dev/mapper/encrypted_next_partition"
+    fstype: ext4
+    state: mounted
+
+- name: Add the encrypted partition to /etc/crypttab
+  lineinfile:
+    path: /etc/crypttab
+    line: "encrypted_next_partition /dev/{{ next_partition.stdout }} none luks"
+
+- name: Add the mount to /etc/fstab
+  lineinfile:
+    path: /etc/fstab
+    line: "/dev/mapper/encrypted_next_partition {{ mount_path }} ext4 defaults 0 0"

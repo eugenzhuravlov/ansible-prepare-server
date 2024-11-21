@@ -1,0 +1,18 @@
+#########################################
+# Environment level groups
+[dev]
+63.176.213.67 ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa
+
+[dev:children]
+dev-cpu
+dev-network
+dev-encrypt
+
+[dev-encrypt]
+63.176.213.67 ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa
+
+[dev-network]
+63.176.213.67 ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa
+
+[dev-cpu]
+63.176.213.67 ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa

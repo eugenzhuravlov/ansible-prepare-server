@@ -1,0 +1,14 @@
+---
+- name: Gather server configuration
+  hosts: all
+  tasks:
+    - name: Gather facts about the server
+      ansible.builtin.setup:
+        filter: ansible_processor
+      register: server_info
+
+    - name: Save server information to a file
+      ansible.builtin.copy:
+        content: "{{ server_info }}"
+        dest: "/tmp/server_facts.json"
+

@@ -1,0 +1,13 @@
+---
+- name: Validate disk existence
+  stat:
+    path: "{{ disk_name }}"
+  register: disk_stat
+
+- name: Fail if disk does not exist
+  fail:
+    msg: "The specified disk {{ disk_name }} does not exist on the system."
+  when: not disk_stat.stat.exists
+
+- name: Include encryption tasks
+  include_tasks: encrypt.yml

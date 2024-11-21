@@ -1,0 +1,14 @@
+---
+- name: Set CPU governor to performance mode
+  shell: |
+    for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+      echo performance > $cpu
+    done
+
+- name: Verify CPU governor settings
+  shell: cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
+  register: governor_status
+
+- name: Display governor status
+  debug:
+    msg: "Governor Status: {{ governor_status.stdout_lines }}"

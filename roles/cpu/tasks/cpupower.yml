@@ -1,0 +1,45 @@
+---
+- name: Check if cpupower tool is installed
+  stat:
+    path: /usr/bin/cpupower
+  register: cpupower_installed
+
+- name: Install cpupower tool
+  apt:
+    name:
+      - linux-tools-common
+      - linux-tools-generic
+      - linux-tools-{{ ansible_kernel }}
+    state: present
+  when: not cpupower_installed.stat.exists
+
+- name: Set CPU governor to performance using cpupower
+  command: cpupower frequency-set -g performance
+  become: true
+  when: cpupower_installed.stat.exists
+
+- name: Verify CPU governor using cpupower
+  command: cpupower frequency-info
+  become: true
+  check_mode: no
+  changed_when: false
+  when: cpupower_installed.stat.exists
+
+- name: Check if cpupower service exists
+  shell: systemctl list-units --type=service --all | grep -w 'cpupower'
+  register: cpupower_service
+  changed_when: false
+  failed_when: false
+
+- name: Skip restart if cpupower service is not found
+  debug:
+    msg: "cpupower service not found; skipping restart."
+  when: cpupower_service.rc != 0
+
+- name: Configure cpupower governor setting
+  copy:
+    dest: /etc/default/cpupower
+    content: |
+      GOVERNOR="performance"
+  notify: Restart cpupower
+  when: cpupower_service.rc != 0

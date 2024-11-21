@@ -1,0 +1,61 @@
+---
+- name: Install cpufrequtils tool
+  apt:
+    name:
+      - cpufrequtils
+    state: present
+
+- name: Check if CPU scaling governor files exist
+  stat:
+    path: /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+  register: governor_file
+  changed_when: false
+
+- name: Skip tasks if CPU scaling governor is not supported
+  debug:
+    msg: "CPU scaling governor is not supported on this system."
+  when: not governor_file.stat.exists
+
+- name: Ensure CPU frequency governor is set to performance
+  shell: |
+    for governor in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+      echo "performance" > $governor;
+    done
+  args:
+    executable: /bin/bash
+  become: true
+  changed_when: true
+  when: governor_file.stat.exists
+
+- name: Verify CPU governor settings
+  shell: cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
+  register: governor_status
+  become: true
+  check_mode: no
+  changed_when: false
+  when: governor_file.stat.exists
+
+- name: Debug governor status
+  debug:
+    msg: "Governor Status: {{ governor_status.stdout_lines | default('Scaling governor not supported') }}"
+  when: governor_file.stat.exists
+
+- name: Check if cpufrequtils service exists
+  shell: systemctl list-units --type=service --all | grep -w 'cpufrequtils'
+  register: cpufrequtils_service
+  changed_when: false
+  failed_when: false
+
+- name: Skip restart if cpufrequtils service is not found
+  debug:
+    msg: "cpufrequtils service not found; skipping restart."
+  when: cpufrequtils_service.rc != 0
+
+- name: Persist performance mode in cpufrequtils
+  copy:
+    dest: /etc/default/cpufrequtils
+    content: |
+      ENABLE="true"
+      GOVERNOR="performance"
+  notify: Restart cpufrequtils
+  when: cpufrequtils_service.rc != 0

@@ -1,0 +1,97 @@
+---
+- name: Install cryptsetup for disk encryption
+  package:
+    name: cryptsetup
+    state: present
+
+- name: Check if disk exists
+  stat:
+    path: "{{ disk_name }}"
+  register: disk_stat
+
+- name: Fail if disk does not exist
+  fail:
+    msg: "The specified disk {{ disk_name }} does not exist."
+  when: not disk_stat.stat.exists
+
+- name: Check if the disk has partitions
+  shell: lsblk -nlo NAME {{ disk_name }} | wc -l
+  register: partition_count
+  changed_when: false
+  check_mode: no  # Ensures the task runs even in --check mode
+
+- name: Partition the disk if no partitions exist
+  shell: parted {{ disk_name }} --script mklabel gpt mkpart primary ext4 0% 100%
+  when: partition_count.stdout | int == 1
+
+- name: Wait for the kernel to recognize the new partition
+  command: partprobe
+  when: partition_count.stdout | int == 1
+
+- name: Check if partition exists
+  stat:
+    path: "{{ partition_name }}"
+  register: partition_stat
+
+- name: Fail if partition does not exist
+  fail:
+    msg: "The specified partition {{ partition_name }} does not exist after partitioning."
+  when: not partition_stat.stat.exists
+
+- name: Check if the partition is already encrypted
+  shell: cryptsetup isLuks {{ partition_name }}
+  register: luks_check
+  failed_when: false
+  changed_when: false
+  check_mode: no  # Ensures the task runs even in --check mode
+
+- name: Debug luks_check output
+  debug:
+    msg: "cryptsetup isLuks result: {{ luks_check.rc }}"
+
+- name: Encrypt the partition
+  command: cryptsetup luksFormat {{ partition_name }} --batch-mode
+  when: luks_check.rc != 0
+
+- name: Open the encrypted partition
+  command: cryptsetup luksOpen {{ partition_name }} {{ encrypted_partition_name }}
+  register: luks_open
+  changed_when: luks_open.rc == 0
+  failed_when: luks_open.rc != 0
+
+- name: Verify the encrypted partition is available
+  stat:
+    path: "/dev/mapper/{{ encrypted_partition_name }}"
+  register: encrypted_partition_stat
+
+- name: Fail if encrypted partition is not available
+  fail:
+    msg: "The encrypted partition /dev/mapper/{{ encrypted_partition_name }} was not created."
+  when: not encrypted_partition_stat.stat.exists
+
+- name: Create a filesystem on the encrypted partition
+  filesystem:
+    fstype: ext4
+    dev: "/dev/mapper/{{ encrypted_partition_name }}"
+
+- name: Create mount directory
+  file:
+    path: "{{ mount_path }}"
+    state: directory
+
+- name: Mount the encrypted partition
+  mount:
+    path: "{{ mount_path }}"
+    src: "/dev/mapper/{{ encrypted_partition_name }}"
+    fstype: ext4
+    state: mounted
+
+- name: Add the encrypted partition to /etc/crypttab
+  lineinfile:
+    path: /etc/crypttab
+    line: "{{ encrypted_partition_name }} {{ partition_name }} none luks"
+
+- name: Add the mount to /etc/fstab
+  lineinfile:
+    path: /etc/fstab
+    line: "/dev/mapper/{{ encrypted_partition_name }} {{ mount_path }} ext4 defaults 0 0"

@@ -1,0 +1,7 @@
+---
+- name: Disable C-states for all CPUs
+  lineinfile:
+    path: /etc/default/grub
+    regexp: '^GRUB_CMDLINE_LINUX='
+    line: 'GRUB_CMDLINE_LINUX="intel_idle.max_cstate=0"'
+  notify: Update GRUB

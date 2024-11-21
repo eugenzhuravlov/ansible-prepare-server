@@ -1,0 +1,5 @@
+# Specify the default partition to encrypt (override in inventory)
+disk_name: /dev/xvdf
+partition_name: /dev/xvdf1
+encrypted_partition_name: encrypted_disk
+mount_path: /mnt/encrypted

@@ -1,0 +1,33 @@
+---
+- name: Prepare CPU-related configurations on dev-cpu hosts
+  hosts: dev-cpu
+  become: yes
+  vars:
+    ht_info: "{{ ansible_processor_cores }} cores, Hyper-Threading: {{ 'enabled' if ansible_processor_threads_per_core > 1 else 'disabled' }}"
+  roles:
+    - role: cpu
+  tasks:
+    - name: Display information about CPUs and Hyper-Threading
+      debug:
+        msg: "{{ ht_info }}"
+
+- name: Encrypt disks on dev-encrypt hosts
+  hosts: dev-encrypt
+  become: yes
+  roles:
+    - role: encrypt_second_disk
+    - role: encrypt_next_partition
+
+- name: Configure network settings on dev-network hosts
+  hosts: dev-network
+  become: yes
+  roles:
+    - role: network
+
+- name: Gather server configuration
+  hosts: dev
+  tasks:
+    - name: Gather facts about the server
+      ansible.builtin.setup:
+        filter: ansible_processor
+      register: server_info

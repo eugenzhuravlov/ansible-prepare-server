@@ -1,0 +1,35 @@
+---
+- name: Get the root partition
+  command: findmnt -n -o SOURCE /
+  register: root_partition
+  changed_when: false
+  check_mode: no  # Ensures the task runs even in --check mode
+
+- name: Set default root partition if undefined
+  set_fact:
+    root_partition: "/dev/xvda1"
+  when: root_partition.stdout == ""
+
+- name: Debug root partition
+  debug:
+    msg: "Root partition is {{ root_partition.stdout | default('unknown') }}"
+
+- name: Extract the disk from the root partition
+  set_fact:
+    root_disk: "{{ root_partition.stdout | regex_replace('([0-9]+$)', '') }}"
+  when: root_partition.stdout != ""
+
+- name: Identify the next partition after root
+  shell: >
+    lsblk -nlo NAME {{ root_disk }} | grep -m 2 `basename {{ root_partition.stdout }}` | tail -n1
+  register: next_partition
+  changed_when: false
+  check_mode: no
+
+- name: Debug next partition
+  debug:
+    msg: "Next partition after root is /dev/{{ next_partition.stdout | default('unknown') }}"
+
+- name: Include encryption tasks
+  include_tasks: encrypt_next_partition.yml
+  when: next_partition.stdout != ""
