@@ -53,11 +53,17 @@
   command: cryptsetup luksFormat {{ partition_name }} --batch-mode
   when: luks_check.rc != 0
 
+- name: Check if the encrypted partition is already opened
+  stat:
+    path: /dev/mapper/encrypted_disk
+  register: encrypted_partition_stat
+  
 - name: Open the encrypted partition
   command: cryptsetup luksOpen {{ partition_name }} {{ encrypted_partition_name }}
   register: luks_open
   changed_when: luks_open.rc == 0
-  failed_when: luks_open.rc != 0
+  failed_when: luks_open.rc != 0  
+  when: not encrypted_partition_stat.stat.exists
 
 - name: Verify the encrypted partition is available
   stat:

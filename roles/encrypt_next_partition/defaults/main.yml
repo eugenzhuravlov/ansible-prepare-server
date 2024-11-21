@@ -1,1 +1,2 @@
 mount_path: /mnt/encrypted_next
+luks_passphrase: "" 

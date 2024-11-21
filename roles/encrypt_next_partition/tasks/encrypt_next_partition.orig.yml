@@ -1,4 +1,3 @@
----
 - name: Check if the partition exists
   stat:
     path: "/dev/{{ next_partition.stdout }}"
@@ -28,35 +27,13 @@
     msg: "The partition /dev/{{ next_partition.stdout }} is already mounted at {{ mount_check.stdout }}."
   when: mount_check.stdout != ""
 
-- name: Generate LUKS passphrase if not provided
-  shell: openssl rand -base64 32
-  register: generated_passphrase
-  when: luks_passphrase | default('') == ''
-
-- name: Set generated passphrase as luks_passphrase
-  set_fact:
-    luks_passphrase: "{{ generated_passphrase.stdout }}"
-  when: luks_passphrase | default('') == ''
-
-- name: Save LUKS passphrase to a secure file
-  copy:
-    content: "{{ luks_passphrase }}"
-    dest: "/root/luks_passphrase_{{ next_partition.stdout }}"
-    owner: root
-    group: root
-    mode: '0400'
-
 - name: Encrypt the partition
-  command: cryptsetup luksFormat /dev/{{ next_partition.stdout }} --batch-mode --key-file=/root/luks_passphrase_{{ next_partition.stdout }}
-  become: true
+  command: cryptsetup luksFormat /dev/{{ next_partition.stdout }} --batch-mode
   when: luks_check.rc != 0
-  args:
-    creates: "/dev/mapper/encrypted_next_partition"
 
 - name: Open the encrypted partition
   command: cryptsetup luksOpen /dev/{{ next_partition.stdout }} encrypted_next_partition
   register: luks_open
-  become: true
   changed_when: luks_open.rc == 0
   failed_when: luks_open.rc != 0
 
@@ -98,17 +75,9 @@
 - name: Add the encrypted partition to /etc/crypttab
   lineinfile:
     path: /etc/crypttab
-    regexp: "^encrypted_next_partition "
     line: "encrypted_next_partition /dev/{{ next_partition.stdout }} none luks"
 
 - name: Add the mount to /etc/fstab
   lineinfile:
     path: /etc/fstab
-    regexp: "^/dev/mapper/encrypted_next_partition "
     line: "/dev/mapper/encrypted_next_partition {{ mount_path }} ext4 defaults 0 0"
-
-- name: Remove LUKS passphrase file after encryption
-  file:
-    path: "/root/luks_passphrase_{{ next_partition.stdout }}"
-    state: absent
-    force: yes

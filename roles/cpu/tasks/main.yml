@@ -2,8 +2,9 @@
 - name: Include C-states tasks for all CPUs
   include_tasks: disable_cstate.yml
 
-- name: Include performance mode tasks using cpupower
-  include_tasks: cpupower.yml
-
-- name: Include performance mode tasks using cpufrequtils
-  include_tasks: cpufrequtils.yml
+- block:
+    - name: Include performance mode tasks using cpufrequtils
+      include_tasks: cpufrequtils.yml
+  rescue:
+    - name: Include performance mode tasks using cpupower
+      include_tasks: cpupower.yml
