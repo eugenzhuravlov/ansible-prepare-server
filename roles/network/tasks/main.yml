@@ -45,6 +45,9 @@
   become: true
   when: interface_name != "net0" and netplan_check.stdout == ""
 
+- name: Reset the SSH connection
+  meta: reset_connection
+
 - name: Bring up the renamed interface
   command: ip link set dev net0 up
   become: true
